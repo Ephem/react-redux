@@ -180,20 +180,51 @@ export default function connectAdvanced(
           'Passing redux store in props has been removed and does not do anything. ' +
             customStoreWarningMessage
         )
+
+        this.getContextValue = this.getContextValue.bind(this)
+
         this.selectDerivedProps = makeDerivedPropsSelector()
         this.selectChildElement = makeChildElementSelector()
-        this.renderWrappedComponent = this.renderWrappedComponent.bind(this)
+
+        if (!this.props.context) {
+          // Here we can safely access context, but if we do,
+          // we also need to handle the case where props change
+          // to include or exclude context
+        }
       }
 
-      renderWrappedComponent(value) {
+      getContextValue() {
+        return this.props.contextValue || this.context
+      }
+
+      render() {
+        // If context exists in props, we need to wrap with
+        // a Consumer and render another <Connect /> with
+        // correct contextValue
+        if (this.props.context) {
+          const PropsContext = this.props.context
+          // eslint-disable-next-line no-unused-vars
+          const { context, ...propsWithoutContext } = this.props
+          return (
+            <PropsContext.Consumer>
+              {value => (
+                <Connect {...propsWithoutContext} contextValue={value} />
+              )}
+            </PropsContext.Consumer>
+          )
+        }
+
+        const contextValue = this.getContextValue()
+
         invariant(
-          value,
+          contextValue,
           `Could not find "store" in the context of ` +
             `"${displayName}". Either wrap the root component in a <Provider>, ` +
             `or pass a custom React context provider to <Provider> and the corresponding ` +
             `React context consumer to ${displayName} in connect options.`
         )
-        const { storeState, store } = value
+
+        const { storeState, store } = contextValue
 
         let wrapperProps = this.props
         let forwardedRef
@@ -211,20 +242,11 @@ export default function connectAdvanced(
 
         return this.selectChildElement(derivedProps, forwardedRef)
       }
-
-      render() {
-        const ContextToUse = this.props.context || Context
-
-        return (
-          <ContextToUse.Consumer>
-            {this.renderWrappedComponent}
-          </ContextToUse.Consumer>
-        )
-      }
     }
 
     Connect.WrappedComponent = WrappedComponent
     Connect.displayName = displayName
+    Connect.contextType = Context
 
     if (forwardRef) {
       const forwarded = React.forwardRef(function forwardConnectRef(
